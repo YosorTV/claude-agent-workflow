@@ -1,0 +1,17 @@
+{
+  "tickets": {
+    "STORY-101": {
+      "title": "Voyage list drops the last page when the cursor is null",
+      "state": "todo",
+      "assignee": null,
+      "description": "Pagination returns an empty final page instead of terminating.",
+      "acceptance": [
+        "A cursor of null terminates the iteration rather than requesting page 0 again.",
+        "A regression test covers the null-cursor case."
+      ],
+      "scope": [],
+      "findings": [],
+      "history": []
+    }
+  }
+}

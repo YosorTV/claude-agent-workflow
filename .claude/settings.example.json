@@ -1,0 +1,21 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git commit:*)",
+        "hooks": [
+          { "type": "command", "command": "./.claude/hooks/scope-guard.sh" },
+          { "type": "command", "command": "./.claude/hooks/quality-gate.sh" }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(rm -rf:*)",
+      "Read(./.env)",
+      "Read(./**/*.pem)"
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+[project]
+name = "tracker-mcp"
+version = "0.1.0"
+description = "Minimal MCP server exposing an issue tracker to coding agents, with the workflow rules enforced server-side."
+requires-python = ">=3.11"
+dependencies = ["mcp>=1.2.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

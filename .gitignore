@@ -1,0 +1,7 @@
+.claude/settings.json
+__pycache__/
+*.pyc
+.venv/
+uv.lock
+node_modules/
+.DS_Store
