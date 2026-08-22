@@ -1,0 +1,9 @@
+# Normalise line endings in the repository. Shell scripts must stay LF:
+# a hook checked out with CRLF fails on Linux and macOS with "bad interpreter".
+* text=auto eol=lf
+
+*.sh      text eol=lf
+*.md      text eol=lf
+*.json    text eol=lf
+*.py      text eol=lf
+*.toml    text eol=lf
