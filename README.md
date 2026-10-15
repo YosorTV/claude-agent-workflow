@@ -193,6 +193,6 @@ fit your team and throw away the rest; the design rules matter more than the fil
 ## Author
 
 **Yevhenii Alieksandrov** - Senior Frontend Engineer building agentic development infrastructure.
-[LinkedIn](https://www.linkedin.com/in/yevhenii-alieksandrov-676053187/)
+[LinkedIn](https://www.linkedin.com/in/yevhenii-alieksandrov)
 
 MIT licensed.
