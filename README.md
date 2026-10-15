@@ -1,69 +1,98 @@
 # claude-agent-workflow
 
-A reference implementation of an **agent-orchestrated development workflow** — the pattern I designed and rolled out
-as the standard way of working for a full engineering team.
+A reference implementation of an **agent-orchestrated development workflow**: a ticket goes from the
+tracker to a reviewed pull request through role agents, with machine gates between the steps and an
+engineer who owns every decision that matters.
 
-This repository is a generalised, employer-neutral extraction of that architecture. It contains no proprietary code:
-the agent definitions, hooks, skill and MCP server here are written from scratch as a working illustration of the
-pattern, so that the design can be read, criticised and reused.
+This repository is a generalised, employer-neutral extraction of a setup I designed, rolled out to an
+engineering team, and have kept developing since. It contains no proprietary code: the agent definitions, hooks, gate,
+skill and MCP server here are written as a working illustration of the pattern, and the hooks and the gate
+ship with their own tests.
 
 ---
 
 ## The problem it solves
 
-A coding agent that writes one file well is a productivity tool. A *team* moving work from ticket to production is a
-pipeline, and pipelines fail at the seams:
+A coding agent that writes one file well is a productivity tool. A *team* moving work from ticket to
+production is a pipeline, and pipelines fail at the seams:
 
-- **Context loss between steps.** A human re-explains the ticket to the agent, then re-explains the diff to the reviewer.
+- **Context loss between steps.** A human re-explains the ticket to the agent, then re-explains the diff
+  to the reviewer.
 - **Unbounded autonomy.** An agent that can do anything eventually does something nobody asked for.
-- **Unverifiable output.** "It compiles" is not "it is correct", and a reviewer who did not write the code cannot tell
-  the difference at speed.
-- **No shared ground.** Every developer configures their own agents, so the same task produces different quality
-  depending on who ran it.
+- **Unverifiable output.** "It compiles" is not "it is correct", and "tests pass" with no output under it
+  is a belief, not a fact.
+- **Silent drift.** The same mistake ships twice because nobody wrote down the first one.
 
-The answer is not a bigger prompt. It is treating the agent fleet as **infrastructure**: explicit roles, explicit
-hand-off contracts, and gates that fail closed.
+The answer is not a bigger prompt. It is treating the agent fleet as **infrastructure**: explicit roles,
+hand-offs as artifacts, one verdict vocabulary, and gates that check the output instead of trusting it.
 
 ---
 
-## Architecture
+## The flow
 
 ```
-  Tracker (Feature → Story → Task)
-            │
-            ▼
-   ┌────────────────┐   hand-off contract   ┌────────────────┐
-   │  investigator  │ ────────────────────► │  implementer   │
-   │  reads the     │   findings.md         │  per stack:    │
-   │  codebase,     │                       │  frontend /    │
-   │  telemetry,    │                       │  backend /     │
-   │  bug repro     │                       │  mobile        │
-   └────────────────┘                       └───────┬────────┘
-            ▲                                       │ diff + tests
-            │ escalation                            ▼
-            │                              ┌────────────────┐
-            └───────────────────────────── │    reviewer    │
-                       rejected            │ correctness,   │
-                                           │ scope, tests   │
-                                           └───────┬────────┘
-                                                   │ passes
-                                                   ▼
-                                        quality-gate hooks (fail closed)
-                                                   │
-                                                   ▼
-                                            pull request
+                                  +-----------+
+                                  |  Engineer |  rules, standing grants, design picks,
+                                  |   (hub)   |  parked decisions, the merge
+                                  +-----+-----+
+                                        |
+ Sync -> Take -> Investigate -> Plan -> Groom -> Design -> Implement -> Review -> Gate -> Test
+                                                                                           |
+                               Retro <- Log <- Close <- Ship <------------------------------+
+
+                   any stage that fails -> failure protocol -> fix, or Park with a handoff
 ```
 
-Three role families, not one general-purpose agent:
+| Stage | What happens | Who |
+|---|---|---|
+| Sync | Repos fast-forwarded to their base branch; a dirty tree is skipped, never stashed | orchestrator |
+| Take | Ticket pulled, description and acceptance criteria parsed | orchestrator, tracker MCP |
+| Investigate | What already exists, with `file:line`, reuse seams and decisions to lock | `investigator` (read-only) |
+| Plan | `Plan.md`: acceptance criteria, blast radius, locked decisions, self-grilled questions | `planner` |
+| Groom | The plan split into sized sub-tasks where the tracker allows it | orchestrator |
+| Design | UI stories: variants in the real product, the engineer picks one | engineer |
+| Implement | Test-first, one vertical slice at a time | `developer` + `governed-tdd` |
+| Review | Standards axis, spec axis, goal achievement; one verdict | `reviewer` |
+| Gate | Green build receipt for the exact commit, rule lints, the repo's diff gate | `gate.sh`, `pre-push-gate.sh` |
+| Test | Every acceptance criterion driven end to end on localhost | `tester` |
+| Ship | Push and open the pull request; the merge follows the org's policy | orchestrator |
+| Close | Ticket to review with a close-out comment and evidence | tracker MCP |
+| Log | Session log written; the session cannot end until it is | `session-sync`, Stop hook |
+| Retro | Failures become rules and gates; removals need the engineer's approval | engineer |
 
-| Role | Reads | Writes | Never |
-| --- | --- | --- | --- |
-| **investigator** | codebase, telemetry, bug reports, tracker history | `findings.md` — a hand-off document | source files |
-| **implementer** | `findings.md`, the ticket, the stack's conventions | source + tests, one story at a time | tracker state, other stacks |
-| **reviewer** | the diff, the ticket, the test run | review verdict, escalation | source files |
+The orchestrator is the main Claude Code session: it dispatches each role with a brief, checks the
+return, and routes on the verdict without overriding it. Each role has only the tools its job needs. The investigator cannot write a file. The reviewer and the
+tester cannot edit source. The developer cannot move tracker state or review itself. An agent that both
+writes and approves its own work has no review step; it has a rubber stamp.
 
-The separation is the point. An agent that both writes and approves its own work has no review step — it has a
-rubber stamp.
+---
+
+## Design rules
+
+**1. Gates check output; they do not trust claims.** No push without a green receipt for that exact
+commit. A gate that ran zero steps is RED. A claim counts only when it traces to command output produced
+after the last change.
+
+**2. Fail open on noise, deny on confidence.** A hook that cannot parse its input lets the call through,
+so a hook bug never wedges unrelated work. When it is sure, it denies. Steps that leave the machine
+(push, pull request, tracker writes) are held to the stricter standard. `--no-verify` is denied outright.
+
+**3. Scope lives in the plan.** `Plan.md` names the blast radius, found by searching for every consumer.
+The reviewer checks the diff against it; the developer goes back to the planner instead of widening it.
+
+**4. Hand-offs are artifacts, passed verbatim.** The investigator report goes into the planner's brief
+as written; the plan's criteria go into the developer's and tester's briefs. Retelling drops facts.
+
+**5. One verdict vocabulary.** `PASS | WARN | FAIL`, WARN counts as FAIL at a gate, and a blocking
+finding must name a concrete failure or quote a written rule. Re-reviews converge instead of finding
+something new every round, and a bounded number of fix rounds ends in a park, not a loop.
+
+**6. Autonomy is granted in writing.** Each org has a standing grant: exactly what an unattended run may
+do, and a NEVER list. The run never asks mid-run; anything that needs a human is parked with a handoff
+note. Retros may add rules on their own; removing one goes through the engineer.
+
+**7. Failures become gates.** Post-mortems are read before the next similar ticket, and a defect class
+that shipped once becomes a check in that repo's diff gate.
 
 ---
 
@@ -71,55 +100,67 @@ rubber stamp.
 
 ```
 .claude/
-  agents/                 role definitions with explicit scope and hand-off contracts
-    investigator.md
-    implementer-frontend.md
-    implementer-backend.md
-    reviewer.md
+  agents/                    7 role definitions
+    investigator.md          read-only scout, reports to the planner
+    planner.md               Plan.md, self-grill, Critique Mode
+    developer.md             one implementer for every stack, test-first
+    reviewer.md              two axes + goal achievement, verdict contract
+    tester.md                end-to-end per acceptance criterion, create-first data
+    debugger.md              hypotheses, regression test, post-mortem
+    session-sync.md          the session log the Stop hook waits for
+  rules/                     path-scoped rule packs, loaded only for matching files
+    frontend.md
+    backend.md
+    authorization.example.md standing grant template
   skills/
-    governed-tdd/         the red → green → refactor cycle as an enforceable skill
-  hooks/
-    quality-gate.sh       runs after the implementer, before anything reaches review
-    scope-guard.sh        rejects edits outside the story's declared surface
-  settings.example.json   wiring: which hooks fire on which events
-
+    governed-tdd/            red, green, refactor, each phase verified
+  bin/
+    gate.sh                  green gate; writes a receipt keyed to the HEAD commit
+    gate.test.sh
+  gate.d/
+    _lib.sh                  helpers for per-repo diff gates
+    _rules.sh                rule lints on added lines, each with an opt-out marker
+  hooks/                     4 Claude Code hooks, each with its test
+    pre-push-gate.sh         PreToolUse: no push without a receipt
+    attribution-gate.mjs     PreToolUse: no AI attribution leaves the machine, no --no-verify
+    sync-due.mjs             PostToolUse: shipped work arms an owed session log
+    run-guard.mjs            Stop: the session cannot end with owed work open
+  settings.example.json      hook wiring
+.githooks/
+  commit-msg                 strips attribution trailers for every committer
 mcp/
-  tracker-mcp/            a minimal MCP server exposing an issue tracker to agents
-                          (read tickets, move state, attach findings)
-
+  tracker-mcp/               a minimal tracker MCP server with server-side transition rules
 docs/
-  architecture.md         hand-off contracts, failure modes, why it is shaped this way
-  rollout.md              how this was adopted by a team without a mandate
+  architecture.md            roles, hand-offs, verdict contract, gates and their fail posture
+  failure-protocol.md        what a run does when a stage fails
+  rollout.md                 how this was adopted by a team without a mandate
 ```
 
----
-
-## Design rules
-
-**1. Fail closed.** A quality gate that can be skipped is documentation, not a gate. `quality-gate.sh` exits non-zero
-and the pipeline stops. There is no `--force`.
-
-**2. Scope is declared, not inferred.** Each story names the files or modules it may touch. `scope-guard.sh` rejects
-edits outside that surface, which is what stops a two-line fix from becoming a refactor nobody reviewed.
-
-**3. Hand-offs are documents, not conversation.** `findings.md` is written by the investigator and read by the
-implementer. When something goes wrong you can read exactly what was known at each step.
-
-**4. Tests come first, and the agent cannot mark its own homework.** The governed-TDD skill requires a failing test
-before an implementation diff, and the reviewer runs the suite itself rather than trusting a claim.
-
-**5. Autonomy is earned per capability.** New tools start in propose-only mode. They graduate when the escalation rate
-justifies it, not when someone feels confident.
+5 test files, 118 checks: `gate.test.sh` 31, `pre-push-gate.test.mjs` 16, `attribution-gate.test.mjs`
+28, `sync-due.test.mjs` 23, `run-guard.test.mjs` 20.
 
 ---
 
 ## Running it
 
+Requirements: git, bash, Node.js 18+, Python 3 (the push hook parses its payload with it).
+
 ```bash
 git clone https://github.com/YosorTV/claude-agent-workflow
 cd claude-agent-workflow
+git config core.hooksPath .githooks
 cp .claude/settings.example.json .claude/settings.json
-chmod +x .claude/hooks/*.sh
+```
+
+To use it in a project, copy `.claude/` and `.githooks/` into that project and run the same two setup
+commands there. State (gate receipts, owed-work markers) lives in `${CLAUDE_CONFIG_DIR:-~/.claude}`, not
+in the repo.
+
+Run the tests:
+
+```bash
+bash .claude/bin/gate.test.sh
+for t in .claude/hooks/*.test.mjs; do node "$t"; done
 ```
 
 The MCP server is standalone:
@@ -127,10 +168,9 @@ The MCP server is standalone:
 ```bash
 cd mcp/tracker-mcp
 uv sync
+cp tracker.example.json tracker.json
 uv run python server.py        # stdio transport
 ```
-
-Point a client at it:
 
 ```json
 {
@@ -144,15 +184,15 @@ Point a client at it:
 
 ## What this is not
 
-It is not a framework, and it is not the code of any product I have worked on. It is the shape of a system that worked
-in production, written out plainly so the reasoning is inspectable. Take the parts that fit your team and throw away
-the rest — the design rules matter more than the files.
+It is not a framework, and it is not the code of any product I have worked on. It is the shape of a
+system that works in production, written out plainly so the reasoning is inspectable. Take the parts that
+fit your team and throw away the rest; the design rules matter more than the files.
 
 ---
 
 ## Author
 
-**Yevhenii Alieksandrov** — Senior Fullstack Engineer (React / Next.js, .NET, Flutter) building agentic development
-infrastructure. [LinkedIn](https://www.linkedin.com/in/yevhenii-alieksandrov-676053187/)
+**Yevhenii Alieksandrov** - Senior Frontend Engineer building agentic development infrastructure.
+[LinkedIn](https://www.linkedin.com/in/yevhenii-alieksandrov-676053187/)
 
 MIT licensed.
