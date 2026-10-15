@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# commit-msg: strips AI-attribution trailer lines (Claude-Session, Co-Authored-By: Claude, "Generated with
+# Claude Code", a bare claude.ai/code/session URL) from every commit message, whoever commits - an agent,
+# a script, a person in a terminal - and rejects a message that still links claude.ai or attributes.
+# Claude Code PreToolUse hooks only see Claude Code's own tool calls; a git hook sees every committer.
+# Wire it once per clone: git config core.hooksPath .githooks
+set -uo pipefail
+
+f="$1"
+[ -f "$f" ] || exit 0
+# Whole lines that are attribution and nothing else: stripped.
+TRAILER='^[[:space:]]*(Claude-Session:|Co-Authored-By:.*(Claude|anthropic\.com)|.*Generated with \[?Claude|<?https?://claude\.ai/code/session_[^[:space:]]*>?[[:space:]]*$)'
+# Anything left that still links claude.ai or attributes: rejected.
+ANY='claude\.ai/|Claude-Session:|Co-Authored-By:[[:space:]]*Claude|Generated with \[?Claude'
+
+n="$(grep -ciE "$TRAILER" "$f" || true)"
+if [ "${n:-0}" -gt 0 ]; then
+  tmp="$f.attr.$$"
+  # drop the trailer lines, then the blank lines they leave at the end
+  grep -viE "$TRAILER" "$f" \
+    | awk '{ l[NR] = $0 } END { e = NR; while (e > 0 && l[e] ~ /^[[:space:]]*$/) e--; for (i = 1; i <= e; i++) print l[i] }' > "$tmp"
+  cat "$tmp" > "$f"; rm -f "$tmp"
+  echo "commit-msg: stripped $n AI-attribution line(s)" >&2
+fi
+# '#' lines are git's own comments, removed after this hook
+if grep -v '^#' "$f" | grep -qiE "$ANY"; then
+  echo "BLOCKED by commit-msg: the message links claude.ai or carries AI attribution. Remove it - do not reach for --no-verify." >&2
+  exit 1
+fi
+exit 0

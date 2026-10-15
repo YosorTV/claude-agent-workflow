@@ -1,11 +1,32 @@
 {
+  "attribution": { "commit": "", "pr": "", "sessionUrl": false },
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash(git commit:*)",
+        "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "./.claude/hooks/scope-guard.sh" },
-          { "type": "command", "command": "./.claude/hooks/quality-gate.sh" }
+          { "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-push-gate.sh\"" }
+        ]
+      },
+      {
+        "matcher": "^(Bash|mcp__.*)$",
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/attribution-gate.mjs\"" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Agent|Task|mcp__tracker__transition",
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/sync-due.mjs\"" }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/run-guard.mjs\"" }
         ]
       }
     ]

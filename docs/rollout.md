@@ -13,13 +13,13 @@ would have lost the room in the first meeting.
 
 ## Make the default path the good path
 
-Nobody adopts a workflow that is extra work. The agents were wired into the flow developers already used —
+Nobody adopts a workflow that is extra work. The agents were wired into the flow developers already used:
 the tracker they already opened, the branches they already cut. Using the agent workflow became less effort
 than not using it, which is the only durable adoption mechanism.
 
 ## Ship the guardrails before the autonomy
 
-Scope guard and quality gate landed *before* the implementer agents did. When the first agent-authored diff
+The quality gates landed *before* the agents that write code did. When the first agent-authored diff
 appeared, the gates that would catch its mistakes were already running and already trusted, because the team
 had watched them catch human mistakes for two weeks.
 
@@ -29,21 +29,23 @@ Reverse that order and the first bad agent diff sets the project back months.
 
 Implementation quality was rarely the blocker. Getting a reviewer agent to reject on evidence rather than
 taste took the most iteration: early versions produced long lists of stylistic notes and missed real defects.
-What fixed it was forcing every finding to name a concrete failing input. If you cannot produce one, it is a
-note, not a finding.
+What fixed it was forcing every blocking finding to name a concrete failing input, or to quote the written
+rule it breaks. If you cannot produce either, it is a note, not a finding. That later became the verdict
+contract in `docs/architecture.md`.
 
 ## Documentation is part of the system
 
 `AGENTS.md` is loaded by the agents and read by new engineers. One artifact, both audiences. When it drifts,
-both degrade at once, which is a useful forcing function — a stale context file produces visibly worse agent
+both degrade at once, which is a useful forcing function: a stale context file produces visibly worse agent
 output within a day.
 
 ## What did not work
 
 **A single do-everything agent.** Higher token cost, worse output, no review step worth the name.
 
-**Optional gates.** Anything that could be skipped was skipped under deadline. Failing closed is not strictness
-for its own sake; it is the only setting that survives a bad week.
+**Optional gates.** Anything that could be skipped was skipped under deadline. A gate with no silent off switch is
+not strictness for its own sake; it is the only setting that survives a bad week. Where an override exists,
+it is a visible per-command prefix, so skipping a gate is a decision someone can see in the log.
 
 **Metrics as the adoption argument.** "Tickets closed per week" convinced nobody and invited a fight about
 measurement. What convinced people was one engineer saying the setup command saved them a day.
