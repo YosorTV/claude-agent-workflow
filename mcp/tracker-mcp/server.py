@@ -1,4 +1,4 @@
-"""tracker-mcp — a minimal MCP server that exposes an issue tracker to agents.
+"""tracker-mcp - a minimal MCP server that exposes an issue tracker to agents.
 
 Deliberately backed by a single JSON file rather than a real tracker API. The point of this
 server is the *shape* of the interface: what an agent is allowed to see, what it is allowed to
@@ -121,8 +121,8 @@ def transition(ticket_id: str, to_state: str, note: str = "") -> dict[str, Any]:
         return {
             "ok": False,
             "reason": (
-                f"{current} → {to_state} is not a legal transition. "
-                f"From {current} you may move to: {', '.join(allowed) or 'nothing — this is terminal'}."
+                f"{current} -> {to_state} is not a legal transition. "
+                f"From {current} you may move to: {', '.join(allowed) or 'nothing - this is terminal'}."
             ),
         }
 
@@ -154,13 +154,14 @@ def append_findings(ticket_id: str, markdown: str, author: str = "investigator")
 
 @mcp.tool()
 def declare_scope(ticket_id: str, globs: list[str], rationale: str = "") -> dict[str, Any]:
-    """Declare the file surface a story may touch.
+    """Record the plan's blast radius: the files and modules a story may touch.
 
-    The scope guard reads this. An empty list is rejected: 'everything' is not a scope.
+    The planner writes it, the reviewer checks the diff against it. An empty list is rejected:
+    'everything' is not a blast radius.
     """
     globs = [g.strip() for g in globs if g.strip()]
     if not globs:
-        return {"ok": False, "reason": "an empty scope is not a scope — name the files"}
+        return {"ok": False, "reason": "an empty scope is not a scope - name the files"}
 
     data = store.load()
     ticket = store.ticket(ticket_id)

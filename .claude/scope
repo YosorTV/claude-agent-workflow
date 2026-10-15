@@ -1,3 +1,0 @@
-# Declared surface for the current story. One glob per line.
-# The scope guard fails closed when this file is missing: an undeclared scope is not an unlimited one.
-docs/*
